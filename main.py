@@ -964,7 +964,7 @@ def main() -> int:
             f"Số môn đang theo dõi ({len(courses)}):\n{course_list}\n\n"
             f"Đã ghi nhận {len(next_state['items'])} mục hiện có (bài tập, điểm, tập tin, "
             "học phần, trang, thông báo, thảo luận, hộp thư, bảng điều khiển...).\n"
-            "Từ lần chạy sau (mỗi 10 phút), mọi thay đổi hoặc deadline < 2 tiếng chưa nộp sẽ được gửi ngay về email này."
+            "Từ lần chạy sau (mỗi 5 phút), mọi thay đổi hoặc deadline < 2 tiếng chưa nộp sẽ được gửi ngay về email này."
         )
         init_html = (
             "<html><body style='font-family:Arial,sans-serif;'>"
@@ -972,7 +972,7 @@ def main() -> int:
             f"<p>Đang theo dõi <b>{len(courses)}</b> môn học active:</p>"
             "<ul>" + "".join(f"<li>{escape(c['name'])}</li>" for c in courses) + "</ul>"
             f"<p>Đã lưu mốc ban đầu (<b>{len(next_state['items'])}</b> mục hiện có dưới dạng mã băm bảo mật). "
-            "Từ lần kiểm tra tiếp theo (mỗi 10 phút), mọi thay đổi mới và nhắc hạn &lt; 2 tiếng chưa nộp sẽ được gửi về email của bạn.</p>"
+            "Từ lần kiểm tra tiếp theo (mỗi 5 phút), mọi thay đổi mới và nhắc hạn &lt; 2 tiếng chưa nộp sẽ được gửi về email của bạn.</p>"
             "</body></html>"
         )
         try:

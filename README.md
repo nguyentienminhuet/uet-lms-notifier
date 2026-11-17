@@ -1,9 +1,9 @@
 # UET-LMS Notifier
 
-Tool tự động kiểm tra **toàn diện Canvas LMS (`https://portal.uet.vnu.edu.vn/`)** mỗi **10 phút** bằng **GitHub Actions** và gửi email ngay về `25022948@vnu.edu.vn` khi có bất kỳ thay đổi nào.
+Tool tự động kiểm tra **toàn diện Canvas LMS (`https://portal.uet.vnu.edu.vn/`)** mỗi **5 phút** bằng **GitHub Actions** và gửi email ngay về `25022948@vnu.edu.vn` khi có bất kỳ thay đổi nào.
 
 ## Tính năng
-1. **Kiểm tra tự động mỗi 10 phút** (`*/10 * * * *`) + hỗ trợ chạy tay (`Run workflow`).
+1. **Kiểm tra tự động mỗi 5 phút** (`*/5 * * * *`) + hỗ trợ chạy tay (`Run workflow`).
 2. **Cảnh báo KHẨN trước hạn nộp `< 2 tiếng`:**
    - Tự nhắc khi bài tập / quiz / sự kiện chưa nộp chỉ còn `< 2 tiếng` trước deadline.
    - Nếu giảng viên mới tạo bài tập mà hạn nộp đã `< 2 tiếng` → báo **KHẨN ngay lập tức**.
@@ -13,7 +13,7 @@ Tool tự động kiểm tra **toàn diện Canvas LMS (`https://portal.uet.vnu.
    - **Trang chủ & Cột trái/phải từng môn:** Bài tập (mới, đổi hạn, cập nhật mô tả), Điểm thành phần & Điểm tổng kết, Phản hồi/Nhận xét bài nộp, Tập tin mới/cập nhật, Học phần (`Modules` / Slide / Tài liệu tuần / Link ngoài), Thông báo chung, Thảo luận, Câu hỏi kiểm tra (`Quizzes`), Trang (`Pages` / `Front Page`), Chương trình học (`Syllabus`).
 4. **Bảo mật dữ liệu trên Public Repo:** `state.json` chỉ lưu mã băm **SHA-256** (không lưu tên môn, tên bài tập, điểm số hay nội dung ra repo).
 
-> Lưu ý về GitHub Actions: Repo **Public** được miễn phí **không giới hạn phút** nên chạy 10 phút/lần thoải mái 24/7. Nếu đổi sang **Private repo**, GitHub miễn phí 2,000 phút/tháng (chạy 10 phút/lần tốn ~4,320 phút/tháng, nên nếu để Private bạn nên đổi cron về `*/25 * * * *` hoặc `*/30 * * * *`).
+> Lưu ý về GitHub Actions: Repo **Public** được miễn phí **không giới hạn phút** nên chạy 5 phút/lần thoải mái 24/7. Nếu đổi sang **Private repo**, GitHub miễn phí 2,000 phút/tháng (chạy 5 phút/lần tốn ~17,280 phút/tháng, nên nếu để Private bạn nên đổi cron về `*/25 * * * *` hoặc `*/30 * * * *`).
 
 ---
 
