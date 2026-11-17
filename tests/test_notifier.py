@@ -32,6 +32,8 @@ class FakeCanvasClient:
         planner_items: list[dict] | None = None,
         todo_items: list[dict] | None = None,
         events: list[dict] | None = None,
+        calendar_events: list[dict] | None = None,
+        self_user: dict | None = None,
         enrollments: list[dict] | None = None,
     ) -> None:
         self.base_url = "https://portal.uet.vnu.edu.vn"
@@ -50,6 +52,8 @@ class FakeCanvasClient:
         self._planner_items = planner_items or []
         self._todo_items = todo_items or []
         self._events = events or []
+        self._calendar_events = calendar_events or []
+        self._self_user = self_user
         self._enrollments = enrollments or []
 
     def get_active_courses(self) -> list[dict]:
@@ -96,6 +100,12 @@ class FakeCanvasClient:
 
     def get_upcoming_events(self) -> list[dict]:
         return self._events
+
+    def get_self_user(self) -> dict | None:
+        return self._self_user
+
+    def get_calendar_events(self, context_codes: list[str], start_iso: str, end_iso: str) -> list[dict]:
+        return [e for e in self._calendar_events if not context_codes or e.get("context_code") in context_codes]
 
     def get_active_enrollments(self) -> list[dict]:
         return self._enrollments
@@ -317,6 +327,43 @@ class NotifierTests(unittest.TestCase):
             loaded = main.load_state(state_file)
             self.assertFalse(loaded["initialized"])
             self.assertEqual(loaded["items"], {})
+
+    def test_personal_planner_notes_and_calendar_events(self) -> None:
+        c0 = FakeCanvasClient(
+            courses=[{"id": 101, "name": "AI"}],
+            self_user={"id": 32361},
+            planner_items=[
+                {"plannable_type": "planner_note", "plannable_id": 1, "plannable": {"title": "Ôn tập"}, "plannable_date": "2026-11-17T13:00:00Z", "planner_override": {"marked_complete": False}},
+                {"plannable_type": "planner_note", "plannable_id": 2, "plannable": {"title": "Đã xong"}, "plannable_date": "2026-11-17T12:10:00Z", "planner_override": {"marked_complete": True}},
+            ],
+        )
+        _, state1, _ = main.collect_updates(c0, {"initialized": False, "items": {}, "reminded_2h": {}}, now=self.NOW)  # type: ignore[arg-type]
+
+        # At 11:30 UTC: note 1 has 1h30m left -> urgent; note 2 is marked_complete -> skipped;
+        # new note 3 due in 40m -> immediate assignment_new_urgent;
+        # new personal calendar event 60 days out (user_32361) -> event_new ("Lịch cá nhân") & deduped against planner_items!
+        c1 = FakeCanvasClient(
+            courses=[{"id": 101, "name": "AI"}],
+            self_user={"id": 32361},
+            calendar_events=[
+                {"id": 888, "type": "event", "title": "Thi cuối kỳ tự đặt", "start_at": "2027-01-15T02:00:00Z", "context_code": "user_32361"},
+            ],
+            planner_items=[
+                {"plannable_type": "planner_note", "plannable_id": 1, "plannable": {"title": "Ôn tập"}, "plannable_date": "2026-11-17T13:00:00Z", "planner_override": {"marked_complete": False}},
+                {"plannable_type": "planner_note", "plannable_id": 2, "plannable": {"title": "Đã xong"}, "plannable_date": "2026-11-17T12:10:00Z", "planner_override": {"marked_complete": True}},
+                {"plannable_type": "planner_note", "plannable_id": 3, "plannable": {"title": "Ghi chú gấp"}, "plannable_date": "2026-11-17T12:10:00Z", "planner_override": {"marked_complete": False}},
+                {"plannable_type": "calendar_event", "plannable_id": 888, "plannable": {"title": "Thi cuối kỳ tự đặt"}, "plannable_date": "2027-01-15T02:00:00Z"},
+            ],
+        )
+        items, _, _ = main.collect_updates(c1, state1, now=datetime(2026, 11, 17, 11, 30, 0, tzinfo=timezone.utc))  # type: ignore[arg-type]
+        self.assertEqual(
+            [(i.kind, i.title, i.course_name) for i in items],
+            [
+                ("deadline_urgent", "Ôn tập", "Ghi chú cá nhân (Bảng điều khiển)"),
+                ("assignment_new_urgent", "Ghi chú gấp", "Ghi chú cá nhân (Bảng điều khiển)"),
+                ("event_new", "Thi cuối kỳ tự đặt", "Lịch cá nhân"),
+            ],
+        )
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ REQUEST_TIMEOUT_SEC = 20
 URGENT_WINDOW_SEC = 2 * 3600
 
 KIND_LABELS = {
-    "assignment_new_urgent": "KHẨN - Bài tập MỚI (< 2h)",
+    "assignment_new_urgent": "KHẨN - Mục MỚI (< 2h)",
     "deadline_urgent": "KHẨN - Sắp hết hạn (< 2h)",
     "assignment_new": "Bài tập mới",
     "assignment_due_changed": "Cập nhật Deadline",
@@ -287,6 +287,33 @@ class CanvasClient:
     def get_upcoming_events(self) -> list[dict[str, Any]]:
         return self._safe_list("/api/v1/users/self/upcoming_events")
 
+    def get_self_user(self) -> dict[str, Any] | None:
+        return self._safe_dict("/api/v1/users/self")
+
+    def get_calendar_events(
+        self,
+        context_codes: list[str],
+        start_iso: str,
+        end_iso: str,
+    ) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        # Canvas limits context_codes[] per request (10 is safe across instances).
+        for idx in range(0, len(context_codes), 10):
+            chunk = context_codes[idx : idx + 10]
+            events.extend(
+                self._safe_list(
+                    "/api/v1/calendar_events",
+                    {
+                        "type": "event",
+                        "context_codes[]": chunk,
+                        "start_date": start_iso,
+                        "end_date": end_iso,
+                        "per_page": 100,
+                    },
+                )
+            )
+        return events
+
     def get_active_enrollments(self) -> list[dict[str, Any]]:
         return self._safe_list("/api/v1/users/self/enrollments", {"state[]": "active"})
 
@@ -307,6 +334,7 @@ class _StateTracker:
         self.seen_announcement_ids: set[str] = set()
         self.seen_discussion_ids: set[str] = set()
         self.seen_quiz_ids: set[str] = set()
+        self.seen_event_ids: set[str] = set()
 
     def track(self, key: str, sig: str) -> str | None:
         self.next_items[key] = sig
@@ -396,6 +424,8 @@ def _resolve_context_name(context_code: str, course_names: dict[int, str]) -> st
             return course_names.get(cid, context_code)
         except ValueError:
             pass
+    if context_code.startswith("user_"):
+        return "Lịch cá nhân"
     return context_code or "UET-LMS"
 
 
@@ -706,9 +736,39 @@ def _collect_global_and_dashboard(
                 )
             )
 
-    # 4. Dashboard Planner items (Ghi chú & các mục Bảng điều khiển chưa theo dõi trực tiếp)
-    start_iso = (tracker.now - timedelta(days=7)).strftime("%Y-%m-%dT00:00:00Z")
-    for pitem in client.get_planner_items(start_iso):
+    # 4. Calendar Events (Cả lịch gần và lịch cá nhân / môn học tới 90 ngày tới)
+    cal_start = (tracker.now - timedelta(days=7)).strftime("%Y-%m-%dT00:00:00Z")
+    cal_end = (tracker.now + timedelta(days=90)).strftime("%Y-%m-%dT23:59:59Z")
+    context_codes = [f"course_{cid}" for cid in course_names]
+    me = client.get_self_user()
+    if me and me.get("id"):
+        context_codes.insert(0, f"user_{me['id']}")
+
+    merged_events: dict[str, dict[str, Any]] = {}
+    for ev in client.get_calendar_events(context_codes, cal_start, cal_end) + client.get_upcoming_events():
+        if ev.get("type") != "event" or not ev.get("id"):
+            continue
+        merged_events[str(ev["id"])] = ev
+
+    for eid, ev in merged_events.items():
+        tracker.seen_event_ids.add(eid)
+        start_at = ev.get("start_at")
+        cname = ev.get("context_name") or _resolve_context_name(str(ev.get("context_code") or ""), course_names)
+        title = ev.get("title") or f"Event {eid}"
+        url = ev.get("html_url") or f"{client.base_url}/calendar"
+        summary = html_to_text(ev.get("description"))
+
+        status = tracker.track(f"event:{eid}", digest(title, start_at, _normalize_html_for_hash(ev.get("description"))))
+        urgent_emitted = tracker.check_urgent_2h(
+            f"event:{eid}", start_at, cname, title, url, is_new_item=(status == "new"), summary=summary
+        )
+        if status == "new" and not urgent_emitted:
+            tracker.notifications.append(NotificationItem("event_new", cname, title, url, due_at=start_at, summary=summary))
+        elif status == "changed" and not urgent_emitted:
+            tracker.notifications.append(NotificationItem("event_changed", cname, title, url, due_at=start_at, summary=summary))
+
+    # 5. Dashboard Planner items (Ghi chú cá nhân + các mục Bảng điều khiển, kèm nhắc < 2h)
+    for pitem in client.get_planner_items(cal_start):
         ptype = str(pitem.get("plannable_type") or "")
         pid = str(pitem.get("plannable_id") or "")
         if not pid:
@@ -721,19 +781,39 @@ def _collect_global_and_dashboard(
             continue
         if ptype == "quiz" and pid in tracker.seen_quiz_ids:
             continue
+        if ptype == "calendar_event" and pid in tracker.seen_event_ids:
+            continue
         pl = pitem.get("plannable") or {}
         title = pl.get("title") or pl.get("name") or f"{ptype} {pid}"
         date_str = pitem.get("plannable_date") or pl.get("due_at") or pl.get("todo_date")
-        cname = pitem.get("context_name") or _resolve_context_name(str(pitem.get("context_type") or ""), course_names)
+        cname = pitem.get("context_name") or (
+            "Ghi chú cá nhân (Bảng điều khiển)"
+            if ptype == "planner_note"
+            else _resolve_context_name(str(pitem.get("context_type") or ""), course_names)
+        )
         raw_url = pitem.get("html_url") or f"{client.base_url}/"
         url = raw_url if str(raw_url).startswith("http") else f"{client.base_url}{raw_url}"
-        status = tracker.track(f"plan:{ptype}:{pid}", digest(title, date_str, pl.get("details")))
-        if status == "new":
-            tracker.notifications.append(NotificationItem("planner_new", cname, title, url, due_at=date_str, summary=html_to_text(pl.get("details"))))
-        elif status == "changed":
-            tracker.notifications.append(NotificationItem("planner_updated", cname, title, url, due_at=date_str, summary=html_to_text(pl.get("details"))))
+        summary = html_to_text(pl.get("details"))
+        override = pitem.get("planner_override") or {}
+        completed = bool(override.get("marked_complete") or override.get("dismissed"))
 
-    # 5. Dashboard Activity Stream (Nhận xét bài chấm, Hội thảo, Cộng tác, Thông báo hệ thống)
+        status = tracker.track(f"plan:{ptype}:{pid}", digest(title, date_str, pl.get("details")))
+        urgent_emitted = tracker.check_urgent_2h(
+            f"plan:{ptype}:{pid}",
+            date_str,
+            cname,
+            title,
+            url,
+            is_new_item=(status == "new"),
+            submitted=completed,
+            summary=summary,
+        )
+        if status == "new" and not urgent_emitted:
+            tracker.notifications.append(NotificationItem("planner_new", cname, title, url, due_at=date_str, summary=summary))
+        elif status == "changed" and not urgent_emitted:
+            tracker.notifications.append(NotificationItem("planner_updated", cname, title, url, due_at=date_str, summary=summary))
+
+    # 6. Dashboard Activity Stream (Nhận xét bài chấm, Hội thảo, Cộng tác, Thông báo hệ thống)
     for act in client.get_activity_stream():
         aid = str(act.get("id") or "")
         atype = str(act.get("type") or "")
@@ -771,7 +851,7 @@ def _collect_global_and_dashboard(
                 NotificationItem("activity_new", cname, title, url, due_at=act.get("created_at"), summary=html_to_text(act.get("message")))
             )
 
-    # 6. Sidebar To-Do fallback (Cần Làm)
+    # 7. Sidebar To-Do fallback (Cần Làm)
     for td in client.get_todo_items():
         asg = td.get("assignment") or {}
         asg_id = asg.get("id")
@@ -785,26 +865,6 @@ def _collect_global_and_dashboard(
         url = asg.get("html_url") or f"{client.base_url}/"
         if tracker.track(f"todo:{digest(td_key)}", digest(title, asg.get("due_at"))) == "new":
             tracker.notifications.append(NotificationItem("todo_new", cname, title, url, due_at=asg.get("due_at")))
-
-    # 7. Upcoming Calendar Events (Lịch)
-    for ev in client.get_upcoming_events():
-        if ev.get("type") != "event" or not ev.get("id"):
-            continue
-        eid = str(ev["id"])
-        start_at = ev.get("start_at")
-        cname = ev.get("context_name") or _resolve_context_name(str(ev.get("context_code") or ""), course_names)
-        title = ev.get("title") or f"Event {eid}"
-        url = ev.get("html_url") or f"{client.base_url}/calendar"
-        summary = html_to_text(ev.get("description"))
-
-        status = tracker.track(f"event:{eid}", digest(title, start_at, _normalize_html_for_hash(ev.get("description"))))
-        urgent_emitted = tracker.check_urgent_2h(
-            f"event:{eid}", start_at, cname, title, url, is_new_item=(status == "new"), summary=summary
-        )
-        if status == "new" and not urgent_emitted:
-            tracker.notifications.append(NotificationItem("event_new", cname, title, url, due_at=start_at, summary=summary))
-        elif status == "changed" and not urgent_emitted:
-            tracker.notifications.append(NotificationItem("event_changed", cname, title, url, due_at=start_at, summary=summary))
 
 
 def collect_updates(

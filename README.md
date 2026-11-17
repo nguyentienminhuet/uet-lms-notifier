@@ -5,11 +5,11 @@ Tool tự động kiểm tra **toàn diện Canvas LMS (`https://portal.uet.vnu.
 ## Tính năng
 1. **Kiểm tra tự động mỗi 5 phút** (`*/5 * * * *`) + hỗ trợ chạy tay (`Run workflow`).
 2. **Cảnh báo KHẨN trước hạn nộp `< 2 tiếng`:**
-   - Tự nhắc khi bài tập / quiz / sự kiện chưa nộp chỉ còn `< 2 tiếng` trước deadline.
-   - Nếu giảng viên mới tạo bài tập mà hạn nộp đã `< 2 tiếng` → báo **KHẨN ngay lập tức**.
-   - Tự bỏ qua bài bạn đã nộp (`submitted` / `graded`). Nếu deadline bị dời sang giờ mới, sẽ tự nhắc lại cho giờ mới.
+   - Tự nhắc khi bài tập / quiz / ghi chú cá nhân / sự kiện lịch chưa hoàn thành chỉ còn `< 2 tiếng` trước deadline.
+   - Nếu giảng viên mới tạo bài tập hoặc bạn mới đặt ghi chú/lịch mà hạn đã `< 2 tiếng` → báo **KHẨN ngay lập tức**.
+   - Tự bỏ qua bài bạn đã nộp (`submitted` / `graded`) hoặc ghi chú đã tick hoàn thành. Nếu deadline bị dời sang giờ mới, sẽ tự nhắc lại cho giờ mới.
 3. **Theo dõi toàn bộ Bảng điều khiển & Từng môn học:**
-   - **Bảng điều khiển & Toàn hệ thống:** Thông báo banner toàn trường UET-LMS, Hộp thư đến (Inbox), Planner / Ghi chú, Luồng hoạt động (`HOẠT ĐỘNG MỚI`), Mục Cần Làm (`To-Do`), Lịch sắp tới.
+   - **Bảng điều khiển & Toàn hệ thống:** Thông báo banner toàn trường UET-LMS, Hộp thư đến (Inbox), Planner / Ghi chú cá nhân, Luồng hoạt động (`HOẠT ĐỘNG MỚI`), Mục Cần Làm (`To-Do`), Lịch cá nhân & Lịch môn học (tới 90 ngày tới).
    - **Trang chủ & Cột trái/phải từng môn:** Bài tập (mới, đổi hạn, cập nhật mô tả), Điểm thành phần & Điểm tổng kết, Phản hồi/Nhận xét bài nộp, Tập tin mới/cập nhật, Học phần (`Modules` / Slide / Tài liệu tuần / Link ngoài), Thông báo chung, Thảo luận, Câu hỏi kiểm tra (`Quizzes`), Trang (`Pages` / `Front Page`), Chương trình học (`Syllabus`).
 4. **Bảo mật dữ liệu trên Public Repo:** `state.json` chỉ lưu mã băm **SHA-256** (không lưu tên môn, tên bài tập, điểm số hay nội dung ra repo).
 
