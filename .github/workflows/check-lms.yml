@@ -1,0 +1,49 @@
+name: Check UET-LMS Updates
+
+on:
+  schedule:
+    # Chạy mỗi 30 phút (~1,440 phút/tháng, nằm trong 2,000 phút miễn phí của private repo)
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: uet-lms-check
+  cancel-in-progress: false
+
+jobs:
+  check-lms:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Check UET-LMS and send email
+        env:
+          CANVAS_BASE_URL: https://portal.uet.vnu.edu.vn
+          CANVAS_TOKEN: ${{ secrets.CANVAS_TOKEN }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+        run: python main.py
+
+      - name: Save state.json if updated
+        run: |
+          if [ -f state.json ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            if ! git diff --cached --quiet; then
+              git commit -m "chore: update lms state [skip ci]"
+              git push
+            fi
+          fi
