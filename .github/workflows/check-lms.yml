@@ -2,8 +2,8 @@ name: Check UET-LMS Updates
 
 on:
   schedule:
-    # Chạy mỗi 30 phút (~1,440 phút/tháng, nằm trong 2,000 phút miễn phí của private repo)
-    - cron: "*/30 * * * *"
+    # Chạy mỗi 10 phút (miễn phí không giới hạn trên public repo; state.json chỉ lưu mã băm SHA-256)
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 permissions:
